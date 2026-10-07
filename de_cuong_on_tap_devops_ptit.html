@@ -310,7 +310,27 @@
 html {
   scroll-behavior: smooth;
   font-size: 16px;
-  scroll-padding-top: 80px;
+  scroll-padding-top: 85px;
+}
+
+.topic-section,
+.content-card,
+[id] {
+  scroll-margin-top: 85px;
+}
+
+:target {
+  scroll-margin-top: 85px;
+  animation: highlightTarget 1.2s ease-out;
+}
+
+@keyframes highlightTarget {
+  0% {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 body {
@@ -486,6 +506,7 @@ body {
   padding: 1.5rem 1rem 2rem 1.5rem;
   border-right: 1px solid var(--border-color);
   background: var(--bg-primary);
+  z-index: 100;
 }
 
 .sidebar-section-title {
@@ -2506,7 +2527,7 @@ Loại tệp  Owner (Chủ)    Group (Nhóm)   Others (Người khác)
                   <td>Không (chỉ nhận merge)</td>
                   <td>Nhánh tích hợp trung tâm. Chứa tất cả mã nguồn mới nhất đã hoàn thành để chuẩn bị cho đợt phát hành kế tiếp.</td>
                 </tr>
-                <tr>
+                <tr id="git-nhanhphu">
                   <td><span class="badge-tag purple">feature/*</span></td>
                   <td>Tạm thời</td>
                   <td><code>develop</code></td>
@@ -3775,6 +3796,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initCopyButtons();
   initReadingProgress();
+  initSidebarNavigation();
   initScrollSpy();
   initSearch();
   initCategoryFilter();
@@ -3868,40 +3890,120 @@ function initReadingProgress() {
 }
 
 /* ==========================================
-   4. ScrollSpy (Active Table of Contents)
+   4. Sidebar Navigation & Smooth Scroll
+   ========================================== */
+function initSidebarNavigation() {
+  const navLinks = document.querySelectorAll('.sidebar-nav-link');
+  const sidebar = document.querySelector('.app-sidebar');
+
+  navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      const href = link.getAttribute('href');
+      if (!href || !href.startsWith('#')) return;
+
+      const targetId = href.substring(1);
+      const targetElem = document.getElementById(targetId);
+      if (!targetElem) return;
+
+      e.preventDefault();
+
+      // Check if target element is inside a hidden section
+      const parentSection = targetElem.closest('.topic-section');
+      if (parentSection && getComputedStyle(parentSection).display === 'none') {
+        let targetCategory = 'all';
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        filterBtns.forEach(btn => {
+          const cat = btn.getAttribute('data-filter');
+          if (cat !== 'all' && parentSection.classList.contains(cat)) {
+            targetCategory = cat;
+          }
+        });
+        applyCategoryFilter(targetCategory, false);
+      }
+
+      // Calculate position offset for sticky top navbar (68px + padding)
+      const headerOffset = 85;
+      const elementPosition = targetElem.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+      window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: 'smooth'
+      });
+
+      // Update URL hash cleanly
+      if (history.pushState) {
+        history.pushState(null, null, href);
+      } else {
+        location.hash = href;
+      }
+
+      // Close mobile sidebar drawer if open
+      if (sidebar && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+      }
+
+      // Set active link in sidebar
+      navLinks.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
+}
+
+/* ==========================================
+   5. ScrollSpy (Active Table of Contents)
    ========================================== */
 function initScrollSpy() {
-  const sections = document.querySelectorAll('.topic-section, .sub-section');
+  const targets = document.querySelectorAll('.topic-section, .content-card, [id]');
   const navLinks = document.querySelectorAll('.sidebar-nav-link');
 
-  if (sections.length === 0 || navLinks.length === 0) return;
+  if (targets.length === 0 || navLinks.length === 0) return;
 
+  const validTargetIds = new Set();
+  navLinks.forEach(link => {
+    const href = link.getAttribute('href');
+    if (href && href.startsWith('#')) {
+      validTargetIds.add(href.substring(1));
+    }
+  });
+
+  let isTicking = false;
   window.addEventListener('scroll', () => {
-    let currentId = '';
-    const scrollPos = window.scrollY + 120;
+    if (isTicking) return;
+    isTicking = true;
 
-    sections.forEach(sec => {
-      const top = sec.offsetTop;
-      const height = sec.offsetHeight;
-      if (scrollPos >= top && scrollPos < top + height) {
-        currentId = sec.getAttribute('id');
-      }
-    });
+    requestAnimationFrame(() => {
+      let currentId = '';
+      const scrollPos = window.scrollY + 120;
 
-    if (currentId) {
-      navLinks.forEach(link => {
-        if (link.getAttribute('href') === `#${currentId}`) {
-          link.classList.add('active');
-        } else {
-          link.classList.remove('active');
+      targets.forEach(el => {
+        const id = el.getAttribute('id');
+        if (!id || !validTargetIds.has(id)) return;
+        if (el.offsetParent === null || el.offsetHeight === 0) return;
+
+        const top = el.offsetTop;
+        const height = el.offsetHeight;
+        if (scrollPos >= top && scrollPos < top + height) {
+          currentId = id;
         }
       });
-    }
+
+      if (currentId) {
+        navLinks.forEach(link => {
+          if (link.getAttribute('href') === `#${currentId}`) {
+            link.classList.add('active');
+          } else {
+            link.classList.remove('active');
+          }
+        });
+      }
+      isTicking = false;
+    });
   }, { passive: true });
 }
 
 /* ==========================================
-   5. Live Search Filter
+   6. Live Search Filter
    ========================================== */
 function initSearch() {
   const searchInput = document.getElementById('global-search');
@@ -3930,29 +4032,39 @@ function initSearch() {
 }
 
 /* ==========================================
-   6. Category Filter (Tabs)
+   7. Category Filter (Tabs)
    ========================================== */
-function initCategoryFilter() {
+function applyCategoryFilter(filter, shouldScroll = true) {
   const filterBtns = document.querySelectorAll('.filter-btn');
   const sections = document.querySelectorAll('.topic-section');
 
+  filterBtns.forEach(b => {
+    if (b.getAttribute('data-filter') === filter) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+
+  sections.forEach(sec => {
+    if (filter === 'all' || sec.classList.contains(filter)) {
+      sec.style.display = '';
+    } else {
+      sec.style.display = 'none';
+    }
+  });
+
+  if (shouldScroll) {
+    window.scrollTo({ top: 350, behavior: 'smooth' });
+  }
+}
+
+function initCategoryFilter() {
+  const filterBtns = document.querySelectorAll('.filter-btn');
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
       const filter = btn.getAttribute('data-filter');
-      sections.forEach(sec => {
-        if (filter === 'all') {
-          sec.style.display = '';
-        } else if (sec.classList.contains(filter)) {
-          sec.style.display = '';
-        } else {
-          sec.style.display = 'none';
-        }
-      });
-
-      window.scrollTo({ top: 350, behavior: 'smooth' });
+      applyCategoryFilter(filter, true);
     });
   });
 }

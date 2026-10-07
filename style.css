@@ -295,7 +295,27 @@
 html {
   scroll-behavior: smooth;
   font-size: 16px;
-  scroll-padding-top: 80px;
+  scroll-padding-top: 85px;
+}
+
+.topic-section,
+.content-card,
+[id] {
+  scroll-margin-top: 85px;
+}
+
+:target {
+  scroll-margin-top: 85px;
+  animation: highlightTarget 1.2s ease-out;
+}
+
+@keyframes highlightTarget {
+  0% {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 body {
@@ -471,6 +491,7 @@ body {
   padding: 1.5rem 1rem 2rem 1.5rem;
   border-right: 1px solid var(--border-color);
   background: var(--bg-primary);
+  z-index: 100;
 }
 
 .sidebar-section-title {
